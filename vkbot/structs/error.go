@@ -1,4 +1,4 @@
-package api
+package structs
 
 type VKError struct {
 	ErrorCode int    `json:"error_code"`
@@ -10,16 +10,16 @@ type ErrorResponse struct {
 }
 
 type ResponseError struct {
-	err     error
-	content string
+	Err     error
+	Content string
 }
 
 func (err ResponseError) Error() string {
-	return err.err.Error()
+	return err.Err.Error()
 }
 
-func (err ResponseError) Content() string {
-	return err.content
+func (err ResponseError) getContent() string {
+	return err.Content
 }
 
 func (err VKError) Error() string {

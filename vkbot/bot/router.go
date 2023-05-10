@@ -1,8 +1,7 @@
-package router
+package bot
 
 import (
 	"log"
-	"vkbot/bot"
 	"vkbot/structs"
 )
 
@@ -17,8 +16,8 @@ var API = newAPI()
 
 var Bot = API.NewBot()
 
-func newAPI() *bot.VkAPI {
-	return &bot.VkAPI{
+func newAPI() *VkAPI {
+	return &VkAPI{
 		Token:           "",
 		URL:             vkAPIURL,
 		Ver:             vkAPIVer,
@@ -59,6 +58,12 @@ func SetLang(lang string) {
 // Function must return string to reply or "" (if no reply)
 func HandleMessage(command string, handler func(string2 *structs.Message) string) {
 	Bot.HandleMessage(command, handler)
+}
+
+// HandleAdvancedMessage - add substr message handler.
+// Function must return string to reply or "" (if no reply)
+func HandleAdvancedMessage(command string, handler func(*structs.Message) structs.Reply) {
+	Bot.HandleAdvancedMessage(command, handler)
 }
 
 // HandleAction - add action handler.

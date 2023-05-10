@@ -1,4 +1,4 @@
-package longpollServer
+package bot
 
 import (
 	"encoding/json"
@@ -11,10 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"vkbot/bot"
-	"vkbot/debug"
-	"vkbot/router"
 	"vkbot/structs"
+	"vkbot/utils"
 )
 
 const LongPollVersion = 3
@@ -28,7 +26,7 @@ type GroupLongPollServer struct {
 	Version         int
 	RequestInterval int
 	NeedPts         bool
-	API             *bot.VkAPI
+	API             *VkAPI
 	LpVersion       int
 	ReadMessages    map[int]time.Time
 }
@@ -50,7 +48,7 @@ type GroupLongPollMessage struct {
 		FwdMessages           []GroupLongPollMessage `json:"fwd_messages"`
 		Important             bool                   `json:"important"`
 		RandomID              int                    `json:"random_id"`
-		// structs.Attachment[]  `json:"attachments"`
+		//Attachment 			  structs.Attachment[]  `json:"attachments"`
 		IsHidden bool `json:"is_hidden"`
 		Action   struct {
 			Type     string
@@ -82,13 +80,13 @@ func NewGroupLongPollServer(requestInterval int) (resp *GroupLongPollServer) {
 
 func (server *GroupLongPollServer) Init() (err error) {
 	r := GroupLongPollServerResponse{}
-	err = router.API.CallMethod("groups.getLongPollServer", bot.H{
-		"group_id": strconv.Itoa(router.API.GroupID),
+	err = API.CallMethod("groups.getLongPollServer", H{
+		"group_id": strconv.Itoa(API.GroupID),
 	}, &r)
 	server.Wait = DefaultWait
 	server.Mode = DefaultMode
 	server.Version = DefaultVersion
-	server.RequestInterval = router.API.RequestInterval
+	server.RequestInterval = API.RequestInterval
 	server.Server = r.Response.Server
 	server.Ts = r.Response.Ts
 	server.Key = r.Response.Key
@@ -117,7 +115,7 @@ func (server *GroupLongPollServer) Request() ([]byte, error) {
 	}
 	resp, err := http.Get(query)
 	if err != nil {
-		debug.DebugPrint("%+v\n", err.Error())
+		DebugPrint("%+v\n", err.Error())
 		time.Sleep(time.Duration(time.Millisecond * time.Duration(server.RequestInterval)))
 		return nil, err
 	}
@@ -154,6 +152,17 @@ func (server *GroupLongPollServer) Request() ([]byte, error) {
 	}
 }
 
+func GetGroupLongPollMessage(resp []interface{}) *structs.Message {
+	message := structs.Message{}
+	mid, _ := resp[1].(json.Number).Int64()
+	message.ID = int(mid)
+	flags, _ := resp[2].(json.Number).Int64()
+	message.Flags = int(flags)
+	message.PeerID, _ = resp[3].(json.Number).Int64()
+	message.Timestamp, _ = resp[4].(json.Number).Int64()
+	message.Body = resp[5].(string)
+	return &message
+}
 func (server *GroupLongPollServer) GetLongPollMessages() ([]*structs.Message, error) {
 	resp, err := server.Request()
 	if err != nil {
@@ -161,26 +170,6 @@ func (server *GroupLongPollServer) GetLongPollMessages() ([]*structs.Message, er
 	}
 	messages, err := server.ParseLongPollMessages(string(resp))
 	return messages.Messages, nil
-}
-
-func (server *GroupLongPollServer) ParseMessage(obj map[string]interface{}) structs.Message {
-	msg := structs.Message{}
-	msg.ID = structs.getJSONInt(obj["id"])
-	msg.Body = obj["text"].(string)
-	userID := structs.getJSONInt(obj["from_id"])
-	if userID != 0 {
-		msg.UserID = userID
-	}
-	msg.PeerID = structs.getJSONInt64(obj["peer_id"])
-	if int64(msg.UserID) == msg.PeerID {
-		msg.ChatID = 0
-	} else {
-		msg.ChatID = int(msg.PeerID)
-	}
-	msg.Date = structs.getJSONInt(obj["date"])
-
-	fmt.Printf("%+v\n", msg)
-	return msg
 }
 
 func (server *GroupLongPollServer) ParseLongPollMessages(j string) (*GroupLongPollResponse, error) {
@@ -196,10 +185,12 @@ func (server *GroupLongPollServer) ParseLongPollMessages(j string) (*GroupLongPo
 	result.Ts = lpMap["ts"].(string)
 	updates := lpMap["updates"].([]interface{})
 	for _, event := range updates {
+		fmt.Println(event)
 		eventType := event.(map[string]interface{})["type"].(string)
 		if eventType == "message_new" {
 			obj := event.(map[string]interface{})["object"].(map[string]interface{})
-			out := structs.getJSONInt(obj["out"])
+			fmt.Println(obj)
+			out := getJSONInt(obj["out"])
 			if out == 0 {
 				msg := server.ParseMessage(obj)
 				result.Messages = append(result.Messages, &msg)
@@ -214,7 +205,39 @@ func (server *GroupLongPollServer) ParseLongPollMessages(j string) (*GroupLongPo
 	return &result, nil
 }
 
-func (server *GroupLongPollServer) FilterReadMesages(messages []*structs.Message) (result []*structs.Message) {
+func (server *GroupLongPollServer) ParseMessage(obj map[string]interface{}) structs.Message {
+	msg := structs.Message{}
+	msg.ID = getJSONInt(obj["id"])
+	message := fmt.Sprintf("%v", obj["message"])
+	msg.Body = message[strings.Index(message, "text:")+len("text:") : len(message)-1]
+	if strings.Contains(msg.Body, "/") {
+		msg.Body = msg.Body[strings.Index(msg.Body, "/"):]
+	}
+	userID, err := strconv.Atoi(utils.ParseArg(message, "from_id:", "fwd_messages:"))
+	if err != nil {
+		fmt.Println("UserID cannot be parsed")
+	}
+	msg.UserID = userID
+	peerID, err := strconv.ParseInt(utils.ParseArg(message, "peer_id:", "random_id:"), 10, 64)
+	if err != nil {
+		fmt.Println("peer_id cannot be parsed")
+	}
+	msg.PeerID = peerID
+	if int64(msg.UserID) == msg.PeerID {
+		msg.ChatID = 0
+	} else {
+		msg.ChatID = int(msg.PeerID)
+	}
+	date, err := strconv.Atoi(utils.ParseArg(message, "date:", "from_id"))
+	if err != nil {
+		fmt.Println("date cannot be parsed")
+	}
+	msg.Date = date
+	fmt.Printf("%+v\n", msg)
+	return msg
+}
+
+func (server *GroupLongPollServer) FilterReadMessages(messages []*structs.Message) (result []*structs.Message) {
 	for _, m := range messages {
 		t, ok := server.ReadMessages[m.ID]
 		if ok {
@@ -227,4 +250,8 @@ func (server *GroupLongPollServer) FilterReadMesages(messages []*structs.Message
 		}
 	}
 	return result
+}
+
+func (server *GroupLongPollServer) GetTs() string {
+	return server.Ts
 }

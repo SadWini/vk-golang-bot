@@ -22,6 +22,7 @@ type Message struct {
 	ChatID      int   `json:"chat_id"`
 	PeerID      int64 `json:"peer_id"`
 	ReadState   int   `json:"read_state"`
+	ConvMsgID   int   `json:"conversation_message_id"`
 	Title       string
 	Body        string
 	Action      string
@@ -36,4 +37,9 @@ type Message struct {
 type Messages struct {
 	Count int
 	Items []*Message
+}
+
+type Reply struct {
+	Msg      string
+	Keyboard *Keyboard
 }

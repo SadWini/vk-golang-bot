@@ -1,4 +1,4 @@
-package longpollServer
+package bot
 
 import (
 	"encoding/json"
@@ -11,9 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"vkbot/bot"
-	"vkbot/debug"
-	"vkbot/router"
 	"vkbot/structs"
 )
 
@@ -34,7 +31,8 @@ type LongPollServer interface {
 	Init() (err error)
 	Request() ([]byte, error)
 	GetLongPollMessages() ([]*structs.Message, error)
-	FilterReadMesages(messages []*structs.Message) (result []*structs.Message)
+	FilterReadMessages(messages []*structs.Message) (result []*structs.Message)
+	GetTs() string
 }
 
 type UserLongPollServer struct {
@@ -46,7 +44,7 @@ type UserLongPollServer struct {
 	Version         int
 	RequestInterval int
 	NeedPts         bool
-	API             *bot.VkAPI
+	API             *VkAPI
 	LpVersion       int
 	ReadMessages    map[int]time.Time
 }
@@ -91,14 +89,14 @@ func (server *UserLongPollServer) Init() (err error) {
 	if server.NeedPts {
 		pts = 1
 	}
-	err = router.API.CallMethod("messages.getLongPollServer", bot.H{
+	err = API.CallMethod("messages.getLongPollServer", H{
 		"need_pts": strconv.Itoa(pts),
 		"message":  strconv.Itoa(server.LpVersion),
 	}, &r)
 	server.Wait = DefaultWait
 	server.Mode = DefaultMode
 	server.Version = DefaultVersion
-	server.RequestInterval = router.API.RequestInterval
+	server.RequestInterval = API.RequestInterval
 	server.Server = r.Response.Server
 	server.Ts = r.Response.Ts
 	server.Key = r.Response.Key
@@ -128,7 +126,7 @@ func (server *UserLongPollServer) Request() ([]byte, error) {
 	}
 	resp, err := http.Get(query)
 	if err != nil {
-		debug.DebugPrint("%+v\n", err.Error())
+		DebugPrint("%+v\n", err.Error())
 		time.Sleep(time.Duration(time.Millisecond * time.Duration(server.RequestInterval)))
 		return nil, err
 	}
@@ -163,6 +161,7 @@ func (server *UserLongPollServer) Request() ([]byte, error) {
 		return buf, nil
 	}
 }
+
 func GetLongPollMessage(resp []interface{}) *structs.Message {
 	message := structs.Message{}
 	mid, _ := resp[1].(json.Number).Int64()
@@ -224,11 +223,11 @@ func (server *UserLongPollServer) ParseLongPollMessages(j string) (*LongPollResp
 	if len(result.Messages) == 0 {
 		fmt.Println(j)
 	}
-	result.Messages = server.FilterReadMesages(result.Messages)
+	result.Messages = server.FilterReadMessages(result.Messages)
 	return &result, nil
 }
 
-func (server *UserLongPollServer) FilterReadMesages(messages []*structs.Message) (result []*structs.Message) {
+func (server *UserLongPollServer) FilterReadMessages(messages []*structs.Message) (result []*structs.Message) {
 	for _, m := range messages {
 		t, ok := server.ReadMessages[m.ID]
 		if ok {
@@ -241,6 +240,10 @@ func (server *UserLongPollServer) FilterReadMesages(messages []*structs.Message)
 		}
 	}
 	return result
+}
+
+func (server *UserLongPollServer) GetTs() string {
+	return strconv.Itoa(server.Ts)
 }
 
 func getJSONInt64(el interface{}) int64 {

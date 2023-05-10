@@ -10,8 +10,6 @@ import (
 	"net/url"
 	"strconv"
 	"time"
-	"vkbot/debug"
-	"vkbot/router"
 	"vkbot/structs"
 )
 
@@ -53,9 +51,9 @@ func (api *VkAPI) IsGroup() bool {
 		return false
 	}
 
-	g, err := router.API.CurrentGroup()
+	g, err := API.CurrentGroup()
 	if err != nil || g.ID == 0 {
-		u, err := router.API.Me()
+		u, err := API.Me()
 		if err != nil || u == nil {
 			fmt.Printf("Get current user/group error %+v\n", err)
 		} else {
@@ -68,7 +66,7 @@ func (api *VkAPI) IsGroup() bool {
 }
 
 func (api *VkAPI) Call(method string, params map[string]string) ([]byte, error) {
-	debug.DebugPrint("vk req: %+v params: %+v\n", api.URL+method, params)
+	DebugPrint("vk req: %+v params: %+v\n", api.URL+method, params)
 	params["access_token"] = api.Token
 	params["v"] = api.Ver
 	if api.Lang != "" {
@@ -89,13 +87,13 @@ func (api *VkAPI) Call(method string, params map[string]string) ([]byte, error) 
 	}
 	resp, err := http.PostForm(api.URL+method, parameters)
 	if err != nil {
-		debug.DebugPrint("%+v\n", err.Error())
+		DebugPrint("%+v\n", err.Error())
 		time.Sleep(time.Duration(time.Millisecond * time.Duration(api.RequestInterval)))
 		return nil, err
 	}
 	buf, err := ioutil.ReadAll(resp.Body)
 	time.Sleep(time.Duration(time.Millisecond * time.Duration(api.RequestInterval)))
-	debug.DebugPrint("vk resp: %+v\n", string(buf))
+	DebugPrint("vk resp: %+v\n", string(buf))
 
 	return buf, err
 }
@@ -105,7 +103,7 @@ func (api *VkAPI) Me() (*structs.User, error) {
 	err := api.CallMethod(apiUsersGet, H{"fields": "screen_name"}, &r)
 
 	if len(r.Response) > 0 {
-		debug.DebugPrint("me: %+v - %+v\n", r.Response[0].ID, r.Response[0].ScreenName)
+		DebugPrint("me: %+v - %+v\n", r.Response[0].ID, r.Response[0].ScreenName)
 		return r.Response[0], err
 	}
 	return nil, err
@@ -124,7 +122,7 @@ func (api *VkAPI) CallMethod(method string, params map[string]string, result int
 			Content: string(buf)}
 	}
 	if r.Error != nil {
-		debug.DebugPrint("%+v\n", r.Error.ErrorMsg)
+		DebugPrint("%+v\n", r.Error.ErrorMsg)
 		return r.Error
 	}
 
@@ -138,7 +136,7 @@ func (api *VkAPI) CurrentGroup() (*structs.User, error) {
 	err := api.CallMethod(apiGroupsGet, H{"fields": "screen_name"}, &r)
 
 	if len(r.Response) > 0 {
-		debug.DebugPrint("me: %+v - %+v\n", r.Response[0].ID, r.Response[0].ScreenName)
+		DebugPrint("me: %+v - %+v\n", r.Response[0].ID, r.Response[0].ScreenName)
 		return r.Response[0], err
 	}
 	return nil, err
@@ -264,10 +262,10 @@ func (api *VkAPI) User(uid int) (*structs.User, error) {
 
 // CheckFriends checking friend invites and matсhes and deletes mutual
 func (bot *VKBot) CheckFriends() {
-	uids, _ := router.API.GetFriendRequests(false)
+	uids, _ := API.GetFriendRequests(false)
 	if len(uids) > 0 {
 		for _, uid := range uids {
-			router.API.AddFriend(uid)
+			API.AddFriend(uid)
 			for k, v := range bot.actionRoutes {
 				if k == "friend_add" {
 					m := structs.Message{Action: "friend_add", UserID: uid}
@@ -276,10 +274,10 @@ func (bot *VKBot) CheckFriends() {
 			}
 		}
 	}
-	uids, _ = router.API.GetFriendRequests(true)
+	uids, _ = API.GetFriendRequests(true)
 	if len(uids) > 0 {
 		for _, uid := range uids {
-			router.API.DeleteFriend(uid)
+			API.DeleteFriend(uid)
 			for k, v := range bot.actionRoutes {
 				if k == "friend_delete" {
 					m := structs.Message{Action: "friend_delete", UserID: uid}

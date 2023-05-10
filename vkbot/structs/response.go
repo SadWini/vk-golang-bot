@@ -5,6 +5,11 @@ type UsersResponse struct {
 	Error    *VKError
 }
 
+type MessagesResponse struct {
+	Response Messages
+	Error    *VKError
+}
+
 type MembersResponse struct {
 	Response VKMembers
 	Error    *VKError
